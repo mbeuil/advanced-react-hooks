@@ -1,7 +1,7 @@
 // useCallback: custom hooks
 // http://localhost:3000/isolated/exercise/02.js
 
-import React, {useReducer} from 'react';
+import React, {useCallback, useReducer} from 'react';
 import {
   fetchPokemon,
   PokemonForm,
@@ -28,7 +28,7 @@ function asyncReducer(state, action) {
   }
 }
 
-function useAsync(asyncCallback, initialState, dependencies) {
+function useAsync(asyncCallback, initialState) {
   const [state, dispatch] = useReducer(asyncReducer, {
     status: 'idle',
     data: null,
@@ -36,39 +36,32 @@ function useAsync(asyncCallback, initialState, dependencies) {
     ...initialState,
   });
 
-  React.useEffect(() => {
-    const promise = asyncCallback();
-    if (!promise) {
-      return;
-    }
+  const run = useCallback(promise => {
     dispatch({type: 'pending'});
-    promise.then(
-      data => {
+    promise
+      .then(data => {
         dispatch({type: 'resolved', data});
-      },
-      error => {
+      })
+      .catch(error => {
         dispatch({type: 'rejected', error});
-      },
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, dependencies);
+      });
+  }, []);
 
-  return state;
+  return {...state, run};
 }
 
 function PokemonInfo({pokemonName}) {
-  const state = useAsync(
-    () => {
-      if (!pokemonName) {
-        return;
-      }
-      return fetchPokemon(pokemonName);
-    },
-    {status: pokemonName ? 'pending' : 'idle'},
-    [pokemonName],
-  );
+  const {data: pokemon, status, error, run} = useAsync({
+    status: pokemonName ? 'pending' : 'idle',
+  });
+  const [count, setCount] = React.useState(0);
 
-  const {data: pokemon, status, error} = state;
+  React.useEffect(() => {
+    if (!pokemonName) {
+      return;
+    }
+    run(fetchPokemon(pokemonName));
+  }, [pokemonName, run]);
 
   if (status === 'idle' || !pokemonName) {
     return 'Submit a pokemon';
@@ -77,7 +70,12 @@ function PokemonInfo({pokemonName}) {
   } else if (status === 'rejected') {
     throw error;
   } else if (status === 'resolved') {
-    return <PokemonDataView pokemon={pokemon} />;
+    return (
+      <>
+        <button onClick={() => setCount(count + 1)}>{count}</button>
+        <PokemonDataView pokemon={pokemon} />
+      </>
+    );
   }
 
   throw new Error('This should be impossible');
