@@ -1,7 +1,14 @@
 // useCallback: custom hooks
 // http://localhost:3000/isolated/exercise/02.js
 
-import React, {useCallback, useReducer} from 'react';
+import React, {
+  useCallback,
+  useReducer,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from 'react';
 import {
   fetchPokemon,
   PokemonForm,
@@ -9,6 +16,26 @@ import {
   PokemonInfoFallback,
   PokemonErrorBoundary,
 } from '../pokemon';
+
+function useSafeDispatch(dispatch) {
+  const isMounted = useRef(false);
+
+  useLayoutEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  return useCallback(
+    (...args) => {
+      if (isMounted.current) {
+        dispatch(...args);
+      }
+    },
+    [dispatch],
+  );
+}
 
 // 🐨 this is going to be our generic asyncReducer
 function asyncReducer(state, action) {
@@ -29,23 +56,28 @@ function asyncReducer(state, action) {
 }
 
 function useAsync(asyncCallback, initialState) {
-  const [state, dispatch] = useReducer(asyncReducer, {
+  const [state, unsafeDispatch] = useReducer(asyncReducer, {
     status: 'idle',
     data: null,
     error: null,
     ...initialState,
   });
 
-  const run = useCallback(promise => {
-    dispatch({type: 'pending'});
-    promise
-      .then(data => {
-        dispatch({type: 'resolved', data});
-      })
-      .catch(error => {
-        dispatch({type: 'rejected', error});
-      });
-  }, []);
+  const dispatch = useSafeDispatch(unsafeDispatch);
+
+  const run = useCallback(
+    promise => {
+      dispatch({type: 'pending'});
+      promise
+        .then(data => {
+          dispatch({type: 'resolved', data});
+        })
+        .catch(error => {
+          dispatch({type: 'rejected', error});
+        });
+    },
+    [dispatch],
+  );
 
   return {...state, run};
 }
@@ -54,9 +86,9 @@ function PokemonInfo({pokemonName}) {
   const {data: pokemon, status, error, run} = useAsync({
     status: pokemonName ? 'pending' : 'idle',
   });
-  const [count, setCount] = React.useState(0);
+  const [count, setCount] = useState(0);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!pokemonName) {
       return;
     }
