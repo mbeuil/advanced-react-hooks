@@ -3,9 +3,6 @@
 
 import React, {createContext, useContext, useState} from 'react';
 
-// 🐨 create your CountContext here with React.createContext
-
-// 🐨 create a CountProvider component here that does this:
 const CountContext = createContext();
 
 const CountProvider = props => {
@@ -15,14 +12,23 @@ const CountProvider = props => {
   return <CountContext.Provider value={value} {...props} />;
 };
 
+const useCount = () => {
+  const context = useContext(CountContext);
+  if (!context) {
+    throw new Error('useCount must be used withon a context provider');
+  }
+
+  return context;
+};
+
 function CountDisplay() {
-  const [count] = useContext(CountContext);
+  const [count] = useCount();
 
   return <div>{`The current count is ${count}`}</div>;
 }
 
 function Counter() {
-  const [, setCount] = useContext(CountContext);
+  const [, setCount] = useCount();
   const increment = () => setCount(c => c + 1);
 
   return <button onClick={increment}>Increment count</button>;
