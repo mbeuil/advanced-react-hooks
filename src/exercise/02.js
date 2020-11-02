@@ -1,14 +1,7 @@
 // useCallback: custom hooks
 // http://localhost:3000/isolated/exercise/02.js
 
-import React, {
-  useCallback,
-  useReducer,
-  useRef,
-  useEffect,
-  useLayoutEffect,
-  useState,
-} from 'react';
+import React, {useEffect, useLayoutEffect, useCallback, useRef} from 'react';
 import {
   fetchPokemon,
   PokemonForm,
@@ -17,27 +10,6 @@ import {
   PokemonErrorBoundary,
 } from '../pokemon';
 
-function useSafeDispatch(dispatch) {
-  const isMounted = useRef(false);
-
-  useLayoutEffect(() => {
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
-
-  return useCallback(
-    (...args) => {
-      if (isMounted.current) {
-        dispatch(...args);
-      }
-    },
-    [dispatch],
-  );
-}
-
-// 🐨 this is going to be our generic asyncReducer
 function asyncReducer(state, action) {
   switch (action.type) {
     case 'pending': {
@@ -55,26 +27,46 @@ function asyncReducer(state, action) {
   }
 }
 
-function useAsync(asyncCallback, initialState) {
-  const [state, unsafeDispatch] = useReducer(asyncReducer, {
+function useSafeDispatch(dispatch) {
+  const mountedRef = useRef(false);
+
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  return useCallback(
+    (...args) => {
+      if (mountedRef.current) {
+        dispatch(...args);
+      }
+    },
+    [dispatch],
+  );
+}
+
+function useAsync(initialState) {
+  const [state, unsafeDispatch] = React.useReducer(asyncReducer, {
     status: 'idle',
     data: null,
     error: null,
     ...initialState,
   });
-
   const dispatch = useSafeDispatch(unsafeDispatch);
 
   const run = useCallback(
     promise => {
       dispatch({type: 'pending'});
-      promise
-        .then(data => {
+      promise.then(
+        data => {
           dispatch({type: 'resolved', data});
-        })
-        .catch(error => {
+        },
+        error => {
           dispatch({type: 'rejected', error});
-        });
+        },
+      );
     },
     [dispatch],
   );
@@ -83,10 +75,9 @@ function useAsync(asyncCallback, initialState) {
 }
 
 function PokemonInfo({pokemonName}) {
-  const {data: pokemon, status, error, run} = useAsync({
+  const {data, status, error, run} = useAsync({
     status: pokemonName ? 'pending' : 'idle',
   });
-  const [count, setCount] = useState(0);
 
   useEffect(() => {
     if (!pokemonName) {
@@ -102,12 +93,7 @@ function PokemonInfo({pokemonName}) {
   } else if (status === 'rejected') {
     throw error;
   } else if (status === 'resolved') {
-    return (
-      <>
-        <button onClick={() => setCount(count + 1)}>{count}</button>
-        <PokemonDataView pokemon={pokemon} />
-      </>
-    );
+    return <PokemonDataView pokemon={data} />;
   }
 
   throw new Error('This should be impossible');
